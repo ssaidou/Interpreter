@@ -15,6 +15,7 @@ namespace ConsoleApplication13
         {
             this.position = 0;
             this.currentToken = null;
+            dict = new Dictionary<string, AST>();
         }
 
         public double? input(string input)
@@ -82,129 +83,228 @@ namespace ConsoleApplication13
         }
 
 
-        public int Factor
+        public AST Factor
         {
             get
             {
                 Token token = null;
+                AST node;
                 int j;
 
                 token = this.Tokens;
 
                 if (token == null)
-                    return 0;
+                    return new AST();
 
                 if (!(Int32.TryParse(token.Value, out j)))
                 {
                     if(token.Type == "LPAREN")
                     {
-                        j = this.Expr;
+                        node = this.Expr;
                         this.currentToken = this.Tokens;
-                        return j;
+                        return node;
                     }
 
                 }
 
                 this.currentToken = this.Tokens;
 
-                return j;
+                return new Num(token);
             }
         }
 
-        public int Term
+        public AST Term
         {
             get
             {
-                int result = 0;
+                AST node = null;
 
-                result = this.Factor;
+                node = this.Factor;
 
                 if (this.currentToken == null)
-                    return result;
+                    return node;
 
                 while (this.currentToken.Type.Equals("MUL") || this.currentToken.Type.Equals("DIV"))
                 {
-                    if (this.currentToken.Value.Equals("*"))
-                    {
-                        result *= this.Factor;
-                    }
-                    else if (this.currentToken.Value.Equals("/"))
-                    {
-                        result /= this.Factor;
-                    }
+                    node = new BinOp(node, this.currentToken, this.Factor);
                     if (this.currentToken == null)
                         break;
                 }
 
-                return result;
+                return node;
             }
         }
 
-        public int Expr
+        public AST Expr
         {
             get
             {
-                int result = 0;
+                AST node = null;
 
-                result = this.Term;
+                node = this.Term;
 
                 if (this.currentToken == null)
-                    return result;
+                    return node;
 
                 while (this.currentToken.Type.Equals("PLUS") || this.currentToken.Type.Equals("MINUS"))
                 {
-                    if (this.currentToken.Value.Equals("+"))
-                    {
-                        result += this.Term;
-                    }
-                    else if (this.currentToken.Value.Equals("-"))
-                    {
-                        result -= this.Term;
-                    }
+                    node = new BinOp(node, this.currentToken, this.Term);
+
                     if (this.currentToken == null)
                         break;
                 }
 
-                return result;
+                return node;
             }
         }
 
+
+        public int interpret { 
+            get
+            {
+                AST exp = this.Expr;
+
+                return this.visit(exp);
+            }
+        }
+
+        public int visit(AST node)
+        {
+
+            if(node.GetType().Name == "BinOp")
+            {
+                BinOp d = node as BinOp;
+                if (d != null)
+                {
+                    if (d.Op.Type.Equals("PLUS"))
+                    {
+                        return this.visit(d.Left) + this.visit(d.Right);
+                    }
+                    else if (d.Op.Type.Equals("MINUS"))
+                    {
+                        return this.visit(d.Left) - this.visit(d.Right);
+                    }
+                    else if (d.Op.Type.Equals("MUL"))
+                    {
+                        return this.visit(d.Left) * this.visit(d.Right);
+                    }
+                    else if (d.Op.Type.Equals("DIV"))
+                    {
+                        return this.visit(d.Left) / this.visit(d.Right);
+                    }
+                }
+            }
+            else if (node.GetType().Name == "Num")
+            {
+                Num d = node as Num;
+                if (d != null)
+                {
+                    return Convert.ToInt32(d.Value);
+                }
+            }
+            else if (node.GetType().Name == "Assign")
+            {
+                Assign d = node as Assign;
+                if (d != null)
+                {
+                    dict.Add(d.Left.Value, d.Right);
+                }
+            }
+            else if (node.GetType().Name == "Var")
+            {
+                Var d = node as Var;
+                if (d != null)
+                {
+                    return 15;
+                }
+            }
+
+            return 0;
+        }
+
         private List<string> tokens;
-        private Token currentToken = null;
-        private int position = 0;
+        private Token currentToken;
+        private int position;
+        private Dictionary<string, AST> dict;
     }
 
-    public class BinOp
+    public class AST
     {
-        public BinOp(Token left, Token op, Token right)
+
+    }
+
+    public class BinOp: AST
+    {
+        public BinOp(AST Left, Token Op, AST Right)
         {
-            this.left = left;
-            this.op = op;
-            this.right = right;
+            this.Left = Left;
+            this.Op = this.Token = Op;
+            this.Right = Right;
         }
 
         public override string ToString()
         {
-            return String.Format("{0}, {1}, {2}", this.left.ToString(), this.op.ToString(), this.right.ToString());
+            return String.Format("{0}, {1}, {2}\n" , this.Left.ToString(), this.Op.ToString(), this.Right.ToString());
         }
 
-        private Token left, op, right;
+        public AST Left { get; set; }
+        public AST Right { get; set; }
+        public Token Op { get; set; }
+        public Token Token { get; set; }
     }
 
-    public class Num
+    public class Num: AST
     {
         public Num(Token token)
         {
-            this.token = token;
+            this.Token = token;
+            this.Value = token.Value;
         }
 
         public override string ToString()
         {
-            return this.token.ToString();
+            return this.Token.ToString() + "\n";
         }
 
-        Token token;
+        public Token Token { get; set; }
+        public string Value { get; set; }
+    }
+
+    public class Var : AST
+    {
+        public Var(Token token)
+        {
+            this.Token = token;
+            this.Value = token.Value;
+        }
+
+        public override string ToString()
+        {
+            return this.Token.ToString() + "\n";
+        }
+
+        public Token Token { get; set; }
+        public string Value { get; set; }
     }
 
 
+    public class Assign : AST
+    {
+        public Assign(Var Left, Token Op, AST Right)
+        {
+            this.Left = Left;
+            this.Op = this.Token = Op;
+            this.Right = Right;
+        }
+
+        public override string ToString()
+        {
+            return String.Format("{0}, {1}, {2}\n", this.Left.ToString(), this.Op.ToString(), this.Right.ToString());
+        }
+
+        public Var Left { get; set; }
+        public AST Right { get; set; }
+        public Token Op { get; set; }
+        public Token Token { get; set; }
+    }
 }
